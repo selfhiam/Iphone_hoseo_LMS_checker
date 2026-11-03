@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         hoseo-lms-check
 // @description  호서 LMS 체크 — 호서대 LMS 화면 위에 이번 주 할 일(과제 · 동영상 출석 · 퀴즈 · 공지)을 모아 보여 줍니다. 학교에서 만든 것이 아닌 비공식 도구입니다.
-// @version      1.0.5
+// @version      1.0.6
 // @updateURL    https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.meta.js
 // @downloadURL  https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.user.js
 // @match        https://learn.hoseo.ac.kr/*
@@ -1410,18 +1410,124 @@
     return false;
   }
 
+  // userscript/src/selfupdate.js
+  var CODE_KEY = "hlc.code";
+  var BAD_KEY = "hlc.codeBad";
+  var SETTINGS_KEY = "hlc.settings";
+  var MIN_SIZE = 2e4;
+  var MAX_SIZE = 3e6;
+  var INSTALLED_KEY = "__hoseoLmsCheckInstalled";
+  var RUNNING_KEY = "__hoseoLmsCheckRunningSaved";
+  function validCode(text, expectVersion) {
+    if (typeof text !== "string" || text.length < MIN_SIZE || text.length > MAX_SIZE) return false;
+    if (!text.startsWith("// ==UserScript==")) return false;
+    if (!/^\/\/ @name\s+hoseo-lms-check\s*$/m.test(text)) return false;
+    const v = metaVersion(text);
+    return !!v && (!expectVersion || v === expectVersion);
+  }
+  function read(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  function remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+    }
+  }
+  function savedCode() {
+    try {
+      const v = JSON.parse(read(CODE_KEY) || "null");
+      return v && typeof v.version === "string" && typeof v.code === "string" ? v : null;
+    } catch {
+      return null;
+    }
+  }
+  function storeCode(version, code) {
+    try {
+      localStorage.setItem(CODE_KEY, JSON.stringify({ version, code, at: Date.now() }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  var clearCode = () => remove(CODE_KEY);
+  var badVersion = () => read(BAD_KEY);
+  function markBad(version) {
+    remove(CODE_KEY);
+    try {
+      localStorage.setItem(BAD_KEY, version);
+    } catch {
+    }
+  }
+  function canRunCode() {
+    try {
+      return new Function("return 1")() === 1;
+    } catch {
+      return false;
+    }
+  }
+  function installedVersion(running) {
+    const v = globalThis[INSTALLED_KEY];
+    return typeof v === "string" ? v : running;
+  }
+  function runSaved(installed, fallback) {
+    if (globalThis[RUNNING_KEY]) return false;
+    const saved = savedCode();
+    if (!saved) return false;
+    let settings = {};
+    try {
+      settings = JSON.parse(read(SETTINGS_KEY) || "{}") || {};
+    } catch {
+      settings = {};
+    }
+    if (settings.autoUpdate === false || !isNewer(saved.version, installed) || !validCode(saved.code, saved.version)) {
+      clearCode();
+      return false;
+    }
+    globalThis[INSTALLED_KEY] = installed;
+    const fail = () => {
+      markBad(saved.version);
+      delete globalThis[INSTALLED_KEY];
+      fallback();
+    };
+    let broken = false;
+    globalThis[RUNNING_KEY] = true;
+    try {
+      new Function(saved.code)();
+    } catch {
+      broken = true;
+    } finally {
+      delete globalThis[RUNNING_KEY];
+    }
+    if (broken) {
+      fail();
+      return true;
+    }
+    const verify = () => {
+      if (!document.getElementById("hoseo-lms-check") && !document.documentElement.hasAttribute("data-hlc-login")) fail();
+    };
+    if (document.body) verify();
+    else document.addEventListener("DOMContentLoaded", () => setTimeout(verify, 0), { once: true });
+    return true;
+  }
+
   // userscript/src/ui.js
-  var VERSION = true ? "1.0.5" : "dev";
+  var VERSION = true ? "1.0.6" : "dev";
   var UPDATE_BASE = true ? "https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main" : "";
   var UPDATE_META = UPDATE_BASE ? `${UPDATE_BASE}/hoseo-lms-check.meta.js` : "";
   var UPDATE_FILE = UPDATE_BASE ? `${UPDATE_BASE}/hoseo-lms-check.user.js` : "";
-  var UPDATE_EVERY_MS = 24 * 60 * 60 * 1e3;
+  var UPDATE_EVERY_MS = 6 * 60 * 60 * 1e3;
+  var INSTALLED = installedVersion(VERSION);
   var APP_NAME = "호서 LMS 체크";
   var HOST_ID = "hoseo-lms-check";
   var FILE_NAME = "hoseo-lms-check.user.js";
   var COOLDOWN_MS = 6e4;
   var S = Status;
-  var KEY = { snapshot: "hlc.snapshot", settings: "hlc.settings", ret: "hlc.return", diag: "hlc.diag", update: "hlc.update", launch: "hlc.launch" };
+  var KEY = { snapshot: "hlc.snapshot", settings: "hlc.settings", ret: "hlc.return", diag: "hlc.diag", update: "hlc.update", launch: "hlc.launch", seen: "hlc.seen" };
   function load(store, key, fallback) {
     try {
       const v = store.getItem(key);
@@ -1448,7 +1554,7 @@
   var state = {
     open: false,
     snapshot: null,
-    settings: { theme: "system", hidden: [] },
+    settings: { theme: "system", hidden: [], autoUpdate: true },
     refreshing: false,
     progress: null,
     lastError: "",
@@ -1459,7 +1565,7 @@
     scroll: {},
     chipScroll: {},
     dialog: null,
-    /** 업데이트 확인: idle · checking · latest · new · error */
+    /** 업데이트: idle · checking · latest · downloading · ready(받아 둠, 새로고침하면 적용) · new(직접 설치해야 함) · error */
     update: { status: "idle", latest: null },
     /** 홈 화면 바로가기(?lmscheck)로 연 탭인지: 이때 ✕ 는 Safari 탭을 닫는다 */
     launchedByShortcut: false
@@ -1578,8 +1684,12 @@
     document.documentElement.style.overflow = "hidden";
     render();
     if (!state.snapshot && !state.refreshing) refresh({ initial: true });
-    const last = load(localStorage, KEY.update, null);
-    if (UPDATE_META && (!last || Date.now() - last.checkedAt > UPDATE_EVERY_MS)) checkUpdate({ silent: true });
+    const seen = load(localStorage, KEY.seen, null);
+    if (seen !== VERSION) {
+      if (seen && isNewer(VERSION, seen)) toast(`새 버전 ${VERSION}로 업데이트됐어요.`, 3500);
+      save(localStorage, KEY.seen, VERSION);
+    }
+    maybeCheckUpdate();
   }
   function closeButton() {
     if (!state.launchedByShortcut) {
@@ -1640,21 +1750,58 @@
     } catch {
     }
   }
+  function maybeCheckUpdate() {
+    const last = load(localStorage, KEY.update, null);
+    if (UPDATE_META && (!last || Date.now() - last.checkedAt > UPDATE_EVERY_MS)) checkUpdate({ silent: true });
+  }
   async function checkUpdate({ silent = false } = {}) {
-    if (!UPDATE_META || state.update.status === "checking") return;
+    if (!UPDATE_META || state.update.status === "checking" || state.update.status === "downloading") return;
     state.update = { ...state.update, status: "checking" };
     if (!silent) render();
+    let latest = null;
     try {
       const res = await fetch(`${UPDATE_META}?t=${Date.now()}`, { cache: "no-store", credentials: "omit" });
-      const latest = res.ok ? metaVersion(await res.text()) : null;
+      latest = res.ok ? metaVersion(await res.text()) : null;
       if (!latest) throw new Error("no version");
-      state.update = { status: isNewer(latest, VERSION) ? "new" : "latest", latest };
       save(localStorage, KEY.update, { checkedAt: Date.now(), latest });
     } catch {
-      const knownNew = !!(state.update.latest && isNewer(state.update.latest, VERSION));
-      state.update = { ...state.update, status: silent ? knownNew ? "new" : "idle" : "error" };
+      const known = state.update.latest && isNewer(state.update.latest, VERSION);
+      state.update = { ...state.update, status: silent ? known ? knownStatus(state.update.latest) : "idle" : "error" };
+      render();
+      return;
+    }
+    if (!isNewer(latest, VERSION)) {
+      state.update = { status: "latest", latest };
+    } else if (knownStatus(latest) === "ready") {
+      state.update = { status: "ready", latest };
+    } else if (state.settings.autoUpdate !== false && badVersion() !== latest) {
+      state.update = { status: "downloading", latest };
+      if (!silent) render();
+      state.update = { status: await downloadUpdate(latest) ? "ready" : "new", latest };
+    } else {
+      state.update = { status: "new", latest };
     }
     render();
+  }
+  function knownStatus(latest) {
+    const saved = savedCode();
+    return saved && saved.version === latest && isNewer(latest, VERSION) ? "ready" : "new";
+  }
+  async function downloadUpdate(latest) {
+    if (!canRunCode()) return false;
+    try {
+      const res = await fetch(`${UPDATE_FILE}?t=${Date.now()}`, { cache: "no-store", credentials: "omit" });
+      if (!res.ok) return false;
+      const text = await res.text();
+      return validCode(text, latest) && storeCode(latest, text);
+    } catch {
+      return false;
+    }
+  }
+  function applyUpdate() {
+    rememberScroll();
+    save(sessionStorage, KEY.ret, { from: location.href, route: state.route, stack: state.stack, tab: state.tab, scroll: state.scroll, ui: state.ui });
+    location.reload();
   }
   function duplicates() {
     return hostEl ? (hostEl.getAttribute("data-dupe") || "").split(",").filter(Boolean) : [];
@@ -1668,56 +1815,94 @@
       `이 스크립트가 ${dupes.length + 1}개 설치되어 있어요 (버전 ${[VERSION, ...dupes].join(", ")}). 파일 앱 → Userscripts 폴더에서 ${FILE_NAME} 하나만 남기고, 나머지(예: 'hoseo-lms-check 2.user.js', '호서 LMS 체크.user.js')는 지워 주세요.`
     );
   }
+  function setAutoUpdate(on) {
+    state.settings = { ...state.settings, autoUpdate: on };
+    save(localStorage, KEY.settings, state.settings);
+    if (!on) {
+      clearCode();
+      if (state.update.status === "ready") state.update = { ...state.update, status: "new" };
+    }
+    render();
+    if (on) checkUpdate();
+  }
   function updateGroup() {
     const u = state.update;
+    const auto = state.settings.autoUpdate !== false;
+    const version = h("div", { class: "t" }, `지금 버전 ${VERSION}`);
+    const installedNote = INSTALLED !== VERSION ? h("div", { class: "d" }, `자동 업데이트로 받은 버전이에요 (Userscripts 폴더의 파일은 ${INSTALLED})`) : null;
     if (!UPDATE_FILE) {
       return setGroup("업데이트", null, h("div", { class: "set-row" }, h(
         "div",
         { class: "grow" },
-        h("div", { class: "t" }, `지금 버전 ${VERSION}`),
+        version,
         h("div", { class: "d" }, "업데이트 주소가 설정되지 않은 버전이에요. 새 파일을 받으면 Userscripts 폴더의 파일을 바꿔 주세요."),
         duplicateNote()
       )));
     }
     const text = {
-      idle: "새 버전이 있는지 확인할 수 있어요. 할 일 화면을 열 때도 하루에 한 번 자동으로 확인해요.",
+      idle: auto ? "새 버전이 나오면 저절로 받아 두었다가, 다음에 LMS 화면을 열 때 바꿔요. 따로 할 일은 없어요." : "새 버전이 있는지 확인할 수 있어요.",
       checking: "확인하는 중…",
       latest: "최신 버전이에요.",
+      downloading: `새 버전 ${u.latest} 받는 중…`,
+      ready: `새 버전 ${u.latest}을 받아 뒀어요. 다음에 LMS 화면을 열 때 저절로 바뀌어요.`,
       new: `새 버전 ${u.latest}이 있어요.`,
       error: "확인하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요."
     }[u.status];
-    const showHow = u.status === "new" || u.status === "error";
-    return setGroup("업데이트", null, h("div", { class: "set-row" }, h(
-      "div",
-      { class: "grow" },
-      h("div", { class: "t" }, `지금 버전 ${VERSION}`),
-      h("div", { class: "d", id: "update-status" }, text),
-      duplicateNote(),
-      h(
-        "div",
-        { class: "chips", style: { "margin-top": "10px" } },
-        h("button", { class: "btn small soft", disabled: u.status === "checking", onclick: () => checkUpdate() }, icon("refresh", 18), "업데이트 확인")
-      ),
-      // Userscripts 팝업의 업데이트 버튼은 지금 파일에 그대로 덮어써서 가장 안전하다
-      showHow ? h("div", { class: "d", style: { "margin-top": "12px" } }, "설치하는 방법 (이 화면 그대로, 1분이면 돼요)") : null,
-      showHow ? h(
-        "ol",
-        { id: "update-how" },
-        h("li", null, "주소창 왼쪽 ", h("b", null, "가가"), "(또는 퍼즐 모양) → ", h("b", null, "Userscripts")),
-        h("li", null, "위쪽 ", h("b", null, "구름 모양 버튼"), " → ", h("b", null, "Check Updates"), " → hoseo-lms-check 옆 ", h("b", null, "Update")),
-        h("li", null, "이 LMS 화면을 새로고침하면 새 버전으로 바뀌어요")
-      ) : null,
-      showHow ? h(
-        "div",
-        { class: "d", style: { "margin-top": "8px" } },
-        "목록에 안 나오면: 아래 버튼으로 새 파일을 연 뒤 가가 → Userscripts → 'Tap to re-install' → 'Install'"
-      ) : null,
-      showHow ? h(
-        "div",
-        { class: "chips", style: { "margin-top": "8px" } },
-        h("a", { class: "btn small ghost", href: UPDATE_FILE, target: "_blank", rel: "noopener" }, icon("download", 18), "새 버전 파일 열기")
-      ) : null
-    )));
+    const manual = u.status === "new" || u.status === "error" && !auto;
+    return [
+      setGroup(
+        "업데이트",
+        null,
+        h("div", { class: "set-row" }, h(
+          "div",
+          { class: "grow" },
+          version,
+          installedNote,
+          h("div", { class: "d", id: "update-status" }, text),
+          duplicateNote(),
+          h(
+            "div",
+            { class: "chips", style: { "margin-top": "10px" } },
+            u.status === "ready" ? h("button", { class: "btn small primary", id: "update-apply", onclick: applyUpdate }, icon("refresh", 18), "지금 바꾸기") : h("button", { class: "btn small soft", disabled: u.status === "checking" || u.status === "downloading", onclick: () => checkUpdate() }, icon("refresh", 18), "업데이트 확인")
+          ),
+          manual ? h("div", { class: "d", style: { "margin-top": "12px" } }, "직접 설치하는 방법 (1분이면 돼요)") : null,
+          manual ? h(
+            "ol",
+            { id: "update-how" },
+            h("li", null, "주소창 왼쪽 ", h("b", null, "가가"), "(또는 퍼즐 모양) → ", h("b", null, "Userscripts")),
+            h("li", null, "위쪽 ", h("b", null, "구름 모양 버튼"), " → ", h("b", null, "Check Updates"), " → hoseo-lms-check 옆 ", h("b", null, "Update")),
+            h("li", null, "이 LMS 화면을 새로고침하면 새 버전으로 바뀌어요")
+          ) : null,
+          manual ? h(
+            "div",
+            { class: "d", style: { "margin-top": "8px" } },
+            "목록에 안 나오면: 아래 버튼으로 새 파일을 연 뒤 가가 → Userscripts → 'Tap to re-install' → 'Install'"
+          ) : null,
+          manual ? h(
+            "div",
+            { class: "chips", style: { "margin-top": "8px" } },
+            h("a", { class: "btn small ghost", href: UPDATE_FILE, target: "_blank", rel: "noopener" }, icon("download", 18), "새 버전 파일 열기")
+          ) : null
+        )),
+        h(
+          "label",
+          { class: "set-row", for: "auto-update" },
+          h(
+            "div",
+            { class: "grow" },
+            h("div", { class: "t" }, "자동 업데이트"),
+            h("div", { class: "d" }, "새 버전을 GitHub에서 받아 이 휴대폰에 저장해 두고 써요. 끄면 Userscripts 폴더에 설치한 파일 버전만 써요.")
+          ),
+          h("span", { class: "switch" }, h("input", {
+            type: "checkbox",
+            id: "auto-update",
+            checked: auto,
+            role: "switch",
+            onchange: (e) => setAutoUpdate(e.target.checked)
+          }), h("span", { class: "track" }, h("span", { class: "knob" })))
+        )
+      )
+    ];
   }
   function closePanel() {
     rememberScroll();
@@ -2045,6 +2230,18 @@
         { class: "body" },
         h("div", { class: "title" }, `새 버전 ${state.update.latest}이 있어요`),
         h("div", { class: "small" }, "눌러서 설치 방법 보기 (설정 → 업데이트)")
+      ), icon("chevron_right", 20)) : null,
+      state.update.status === "ready" ? h("div", {
+        class: "banner info tap",
+        role: "button",
+        id: "update-ready",
+        style: { "margin-bottom": "4px" },
+        onclick: applyUpdate
+      }, icon("download", 20), h(
+        "div",
+        { class: "body" },
+        h("div", { class: "title" }, `새 버전 ${state.update.latest}을 받아 뒀어요`),
+        h("div", { class: "small" }, "눌러서 지금 바꾸기 (다음에 열 때는 저절로 바뀌어요)")
       ), icon("chevron_right", 20)) : null,
       duplicates().length ? h("div", {
         class: "banner warning tap",
@@ -2615,12 +2812,12 @@
       h("div", { id: "dialog-root" })
     );
     document.body.append(hostEl);
-    state.settings = { theme: "system", hidden: [], ...load(localStorage, KEY.settings, {}) };
+    state.settings = { theme: "system", hidden: [], autoUpdate: true, ...load(localStorage, KEY.settings, {}) };
     applyTheme();
     const snap = load(localStorage, KEY.snapshot, null);
     if (snap && snap.kind === "web" && Array.isArray(snap.courses)) state.snapshot = snap;
     const known = load(localStorage, KEY.update, null);
-    if (known && known.latest) state.update = { status: isNewer(known.latest, VERSION) ? "new" : "latest", latest: known.latest };
+    if (known && known.latest) state.update = { status: isNewer(known.latest, VERSION) ? knownStatus(known.latest) : "latest", latest: known.latest };
     const fromShortcut = /[?&]lmscheck\b/.test(location.search);
     if (fromShortcut) save(sessionStorage, KEY.launch, 1);
     state.launchedByShortcut = fromShortcut || !!load(sessionStorage, KEY.launch, null);
@@ -2634,6 +2831,7 @@
     } else {
       render();
     }
+    maybeCheckUpdate();
     if (media) {
       const onScheme = () => {
         if (state.settings.theme === "system") applyTheme();
@@ -2658,8 +2856,12 @@
   }
 
   // userscript/src/main.js
-  if (window.top === window.self) {
+  var INSTALLED2 = true ? "1.0.6" : "dev";
+  function boot() {
     if (document.body) start();
     else document.addEventListener("DOMContentLoaded", start, { once: true });
+  }
+  if (window.top === window.self) {
+    if (!runSaved(INSTALLED2, boot)) boot();
   }
 })();
