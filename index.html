@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>호서 LMS 체크 설치</title>
+<meta name="description" content="아이폰 Safari에서 호서대 LMS의 이번 주 할 일을 한눈에 보는 비공식 도구 설치 안내">
+<style>
+:root {
+  --bg: #F5F6FA; --surface: #FFFFFF; --surface-2: #F0F2F7; --text: #14161A; --text-2: #5F6673; --text-3: #8A919E;
+  --border: #E6E9F0; --primary: #2F5BEA; --on-primary: #FFFFFF; --primary-soft: #E8EEFF; --on-primary-soft: #0B2A86;
+  --success: #16A34A; --success-soft: #E7F7EC; --warning: #B45309; --warning-soft: #FFF4E0;
+  --hero-1: #2F5BEA; --hero-2: #6A8BFF; --shadow: 0 6px 24px rgba(20, 22, 26, 0.08);
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1115; --surface: #171A20; --surface-2: #20242C; --text: #E8EAEE; --text-2: #A9B0BC; --text-3: #8A919E;
+    --border: #2A2F3A; --primary: #7C9BFF; --on-primary: #0B1020; --primary-soft: #1D2747; --on-primary-soft: #C9D6FF;
+    --success: #4ADE80; --success-soft: #13291B; --warning: #FBBF24; --warning-soft: #3A2C12;
+    --hero-1: #2443B8; --hero-2: #4F6FE0; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1115; --surface: #171A20; --surface-2: #20242C; --text: #E8EAEE; --text-2: #A9B0BC; --text-3: #8A919E;
+  --border: #2A2F3A; --primary: #7C9BFF; --on-primary: #0B1020; --primary-soft: #1D2747; --on-primary-soft: #C9D6FF;
+  --success: #4ADE80; --success-soft: #13291B; --warning: #FBBF24; --warning-soft: #3A2C12;
+  --hero-1: #2443B8; --hero-2: #4F6FE0; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); font-family: var(--font);
+  font-size: 16px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere;
+}
+main { max-width: 560px; margin: 0 auto; padding: 0 16px calc(40px + env(safe-area-inset-bottom)); }
+a { color: var(--primary); }
+b { font-weight: 700; }
+
+.hero {
+  margin: 0 -16px; padding: calc(28px + env(safe-area-inset-top)) 20px 26px;
+  background: linear-gradient(135deg, var(--hero-1), var(--hero-2)); color: #fff;
+}
+.hero .tag { display: inline-block; font-size: 12.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.18); }
+.hero h1 { margin: 12px 0 6px; font-size: 27px; line-height: 1.25; letter-spacing: -0.02em; }
+.hero p { margin: 0; color: rgba(255,255,255,.9); font-size: 15.5px; }
+.facts { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.facts li { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.14); }
+
+.env { margin-top: 16px; padding: 16px; border-radius: 16px; background: var(--warning-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.env h2 { margin: 0 0 4px; font-size: 16.5px; color: var(--warning); }
+.env p { margin: 0 0 12px; font-size: 14.5px; color: var(--text-2); }
+.env .small { margin: 10px 0 0; font-size: 13.5px; }
+
+.progress { margin: 22px 2px 10px; display: flex; align-items: center; gap: 12px; }
+.progress .label { font-size: 14px; color: var(--text-2); white-space: nowrap; }
+.bar { flex: 1; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 0; background: var(--success); border-radius: inherit; transition: width .3s ease; }
+
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.step { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+.step.current { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); }
+.step-head { display: flex; align-items: center; gap: 12px; padding: 16px; }
+.step.done .step-head { cursor: pointer; }
+.num { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; background: var(--primary-soft); color: var(--on-primary-soft); }
+.step.done .num { background: var(--success-soft); color: var(--success); }
+.step-head h2 { margin: 0; font-size: 17px; line-height: 1.3; flex: 1; }
+.step-head .state { font: inherit; font-size: 13px; color: var(--success); font-weight: 600; white-space: nowrap; background: none; border: 0; padding: 6px 2px; cursor: pointer; }
+.step-head .opt { font-size: 12.5px; color: var(--text-3); font-weight: 500; margin-left: 4px; }
+.step-body { padding: 0 16px 16px 60px; }
+.step.done:not(.open) .step-body { display: none; }
+.step-body p { margin: 0 0 12px; color: var(--text-2); font-size: 15px; }
+.step-body ol { margin: 0 0 12px; padding-left: 20px; }
+.step-body li { margin: 4px 0; font-size: 15px; }
+.step-body .note { font-size: 13.5px; color: var(--text-3); margin: 10px 0 0; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 52px; padding: 12px 18px;
+  border-radius: 14px; border: 0; font: inherit; font-weight: 700; font-size: 16.5px; text-decoration: none; cursor: pointer;
+  background: var(--primary); color: var(--on-primary); margin: 4px 0 12px;
+}
+.btn.soft { background: var(--primary-soft); color: var(--on-primary-soft); }
+.btn:active { transform: scale(0.985); }
+.btn svg { width: 20px; height: 20px; flex: none; }
+.check {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.step.done .check { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, var(--border)); }
+kbd { font-family: inherit; font-size: .92em; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+.path { display: block; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14.5px; }
+
+.finish { margin-top: 16px; padding: 18px 16px; border-radius: 18px; background: var(--success-soft); }
+.finish h2 { margin: 0 0 4px; font-size: 17px; color: var(--success); }
+.finish p { margin: 0; color: var(--text-2); font-size: 14.5px; }
+
+details { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 0 16px; }
+details + details { margin-top: 8px; }
+summary { padding: 14px 0; font-weight: 600; cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 10px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--text-3); font-weight: 400; font-size: 20px; line-height: 1; }
+details[open] summary::after { content: "−"; }
+details p, details li { font-size: 14.5px; color: var(--text-2); }
+details p { margin: 0 0 12px; }
+details ul { margin: 0 0 14px; padding-left: 20px; }
+h3.sec { margin: 26px 2px 4px; font-size: 14px; color: var(--text-3); font-weight: 600; }
+footer { margin-top: 28px; text-align: center; font-size: 12.5px; color: var(--text-3); }
+footer p { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <span class="tag">비공식 · 아이폰 Safari용</span>
+    <h1>호서 LMS 체크</h1>
+    <p>LMS 화면에 파란 버튼을 띄워 이번 주 과제 · 동영상 출석 · 퀴즈 · 공지를 한 화면에 보여 줘요.</p>
+    <ul class="facts">
+      <li>비밀번호를 다루지 않아요</li>
+      <li>정보는 내 아이폰에만 저장</li>
+      <li>업데이트는 저절로</li>
+    </ul>
+  </header>
+
+  <!-- 카카오톡 · 크롬 등 Safari가 아닌 곳에서 열었을 때 -->
+  <section class="env" id="env" hidden>
+    <h2 id="env-title">Safari에서 열어 주세요</h2>
+    <p id="env-text">카카오톡이나 다른 앱 안의 화면에서는 설치할 수 없어요.</p>
+    <a class="btn" id="open-safari" href="#">Safari로 열기</a>
+    <button class="btn soft" id="copy-link" type="button">이 페이지 주소 복사</button>
+    <p class="small" id="env-hint">버튼이 안 되면: 화면 구석의 <kbd>⋯</kbd> 또는 공유 버튼 → <b>Safari로 열기</b>. 아니면 주소를 복사해 Safari 주소창에 붙여 넣으세요.</p>
+  </section>
+
+  <div class="progress" aria-live="polite">
+    <span class="label" id="progress-label">3단계 · 2분이면 끝나요</span>
+    <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
+  </div>
+
+  <ol class="steps">
+    <li class="step" data-step="app">
+      <div class="step-head"><span class="num">1</span><h2>Userscripts 앱 받기</h2><button class="state" type="button" hidden></button></div>
+      <div class="step-body">
+        <p>Safari에 이 스크립트를 넣어 주는 무료 앱이에요 (개발자 Justin Wasack).</p>
+        <a class="btn" href="https://apps.apple.com/kr/app/userscripts/id1463298887" data-done="app">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14"/></svg>
+          App Store에서 받기
+        </a>
+        <p class="note">받은 뒤 앱을 한 번 열어 주세요. 따로 설정할 건 없어요.</p>
+        <button class="check" type="button" data-check="app">✓ 다 했어요</button>
+      </div>
+    </li>
+
+    <li class="step" data-step="ext">
+      <div class="step-head"><span class="num">2</span><h2>Safari에서 Userscripts 켜기</h2><button class="state" type="button" hidden></button></div>
+      <div class="step-body">
+        <p>아이폰 <b>설정</b> 앱에서:</p>
+        <span class="path"><b>설정</b> → <b>앱</b> → <b>Safari</b> → <b>확장 프로그램</b> → <b>Userscripts</b></span>
+        <ol>
+          <li><b>확장 프로그램 허용</b>을 켜요</li>
+          <li>아래 <b>모든 웹사이트</b>(또는 '기타 웹사이트')를 <b>허용</b>으로 바꿔요</li>
+        </ol>
+        <p class="note">iOS 17 이하는 <b>설정 → Safari → 확장 프로그램</b>이에요. 다 켰으면 Safari로 돌아와 이 페이지에서 계속하세요.</p>
+        <button class="check" type="button" data-check="ext">✓ 다 했어요</button>
+      </div>
+    </li>
+
+    <li class="step" data-step="script">
+      <div class="step-head"><span class="num">3</span><h2>스크립트 설치</h2><button class="state" type="button" hidden></button></div>
+      <div class="step-body">
+        <a class="btn" id="script-link" href="https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.user.js" data-done="script">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6"/></svg>
+          스크립트 열기
+        </a>
+        <p>코드가 가득한 화면이 열리면:</p>
+        <ol>
+          <li>주소창의 <kbd>가가</kbd> (또는 <kbd>⋯</kbd>, 퍼즐 모양) → <b>Userscripts</b></li>
+          <li>위쪽 <b>Tap to install</b> → <b>Install</b></li>
+          <li><b>뒤로 가기</b>로 이 페이지에 돌아오기</li>
+        </ol>
+        <p class="note">'이 웹사이트에 접근하도록 허용할까요?'가 나오면 <b>항상 허용</b>을 눌러요.</p>
+        <button class="check" type="button" data-check="script">✓ 다 했어요</button>
+      </div>
+    </li>
+
+    <li class="step" data-step="lms">
+      <div class="step-head"><span class="num">✓</span><h2>LMS에서 확인 · 홈 화면 아이콘<span class="opt">(추천)</span></h2><button class="state" type="button" hidden></button></div>
+      <div class="step-body">
+        <a class="btn" href="https://learn.hoseo.ac.kr/my/?lmscheck" data-done="lms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
+          LMS 열기
+        </a>
+        <p>평소처럼 로그인하면 할 일 화면이 떠요. 처음 한 번은 10~30초 걸려요.</p>
+        <p><b>홈 화면 아이콘 만들기</b> — 할 일 화면이 뜬 상태에서:</p>
+        <ol>
+          <li><kbd>⋯</kbd> 또는 공유 버튼 → <b>홈 화면에 추가</b></li>
+          <li><b>웹 앱으로 열기</b>를 <b>끄고</b> → <b>추가</b></li>
+        </ol>
+        <p class="note">'웹 앱으로 열기'를 켜 두면 Safari 확장이 동작하지 않아 파란 버튼이 안 떠요. 이 아이콘으로 열면 오른쪽 위 ✕ 를 눌렀을 때 탭이 닫혀요.</p>
+        <button class="check" type="button" data-check="lms">✓ 다 했어요</button>
+      </div>
+    </li>
+  </ol>
+
+  <section class="finish" id="finish" hidden>
+    <h2>설치 끝!</h2>
+    <p>이제 LMS에 들어가면 오른쪽 아래 파란 버튼이 보여요. 새 버전은 저절로 받아져서 따로 업데이트할 필요가 없어요.</p>
+  </section>
+
+  <h3 class="sec">잘 안 될 때</h3>
+  <details>
+    <summary>LMS에 파란 버튼이 안 보여요</summary>
+    <ul>
+      <li>2단계(확장 켜기 · 모든 웹사이트 허용)를 다시 확인해 주세요.</li>
+      <li>LMS 화면에서 <kbd>가가</kbd> → <b>Userscripts</b> → <b>허용</b>(항상 허용)을 누르고 새로고침해요.</li>
+      <li>Userscripts 앱 목록에 <b>hoseo-lms-check</b>가 있는지 봐요. 없으면 3단계를 다시 해요.</li>
+    </ul>
+  </details>
+  <details>
+    <summary>홈 화면 아이콘으로 열면 버튼이 없어요</summary>
+    <p>아이콘이 웹 앱(주소창 없는 화면)으로 열린 거예요. 아이콘을 지우고 4단계에서 <b>웹 앱으로 열기를 끄고</b> 다시 추가해 주세요.</p>
+    <p>그래도 안 되면 <b>단축어</b> 앱 → <b>+</b> → <b>URL 열기</b>를 추가하고, 주소에 <b>x-safari-https://learn.hoseo.ac.kr/my/?lmscheck</b> 를 넣은 뒤 공유 버튼 → 홈 화면에 추가 하세요.</p>
+  </details>
+  <details>
+    <summary>'Tap to install'이 안 보여요</summary>
+    <ul>
+      <li>꼭 <b>Safari</b>에서 3단계 버튼을 눌러야 해요 (카카오톡 · 크롬 안 됨).</li>
+      <li>Userscripts 화면 위쪽에 아무것도 없으면 아래로 당겨 새로고침하거나, 이 페이지로 돌아와 버튼을 다시 눌러요.</li>
+    </ul>
+  </details>
+  <details>
+    <summary>안전한가요?</summary>
+    <p>학교에서 만든 것이 아닌 개인용 비공식 도구예요. 이미 로그인한 LMS 화면 안에서 LMS 페이지를 읽기만 하고, 비밀번호를 다루지 않아요. 읽은 정보는 내 아이폰 Safari에만 저장되고 다른 곳으로 보내지 않아요. 학교 서버 부담을 줄이려고 처음 열 때와 새로고침 버튼을 누를 때만 LMS를 읽어요.</p>
+    <p>새 버전은 이 GitHub 저장소에서만 받아요. 코드는 저장소에서 누구나 볼 수 있어요.</p>
+  </details>
+
+  <footer>
+    <p>학교에서 만든 것이 아닌 개인용 비공식 도구입니다.</p>
+    <p><a href="https://github.com/selfhiam/Iphone_hoseo_LMS_checker">GitHub 저장소</a> · 갤럭시용은 준비 중</p>
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var STEPS = ['app', 'ext', 'script', 'lms'];
+  var KEY = 'hlc-guide';
+
+  // ── 진행 상황 (이 기기에만, 못 쓰는 환경이면 그냥 넘어감)
+  var done = {};
+  try { done = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { done = {}; }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(done)); } catch (e) { /* 무시 */ } }
+
+  var open = {};
+  function render() {
+    var firstTodo = null;
+    var count = 0;
+    STEPS.forEach(function (id) {
+      var el = document.querySelector('[data-step="' + id + '"]');
+      var isDone = !!done[id];
+      if (isDone) count++;
+      else if (!firstTodo) firstTodo = id;
+      el.classList.toggle('done', isDone);
+      el.classList.toggle('open', !!open[id]);
+      var st = el.querySelector('.state');
+      st.hidden = !isDone;
+      st.textContent = open[id] ? '접기' : '완료 ✓ 다시 보기';
+      st.setAttribute('aria-expanded', open[id] ? 'true' : 'false');
+      el.querySelector('.check').textContent = isDone ? '✓ 완료 (다시 하기)' : '✓ 다 했어요';
+      el.querySelector('.check').setAttribute('aria-pressed', isDone ? 'true' : 'false');
+    });
+    STEPS.forEach(function (id) {
+      document.querySelector('[data-step="' + id + '"]').classList.toggle('current', id === firstTodo);
+    });
+    var required = ['app', 'ext', 'script'].filter(function (id) { return done[id]; }).length;
+    document.getElementById('progress-bar').style.width = (count / STEPS.length * 100) + '%';
+    document.getElementById('progress-label').textContent = required === 3
+      ? (done.lms ? '모두 끝났어요' : '설치 끝 · LMS에서 확인해 보세요')
+      : (required ? '3단계 중 ' + required + '단계 완료' : '3단계 · 2분이면 끝나요');
+    document.getElementById('finish').hidden = required < 3;
+  }
+
+  function mark(id, value) {
+    done[id] = value;
+    if (value) open[id] = false;
+    persist();
+    render();
+  }
+
+  STEPS.forEach(function (id) {
+    var el = document.querySelector('[data-step="' + id + '"]');
+    el.querySelector('.step-head').addEventListener('click', function () {
+      if (!done[id]) return;
+      open[id] = !open[id];
+      render();
+    });
+    el.querySelector('.check').addEventListener('click', function () { mark(id, !done[id]); });
+  });
+  // 바깥으로 나가는 버튼을 누르면 그 단계는 한 것으로 본다 (돌아왔을 때 다음 단계가 보이게)
+  Array.prototype.forEach.call(document.querySelectorAll('[data-done]'), function (a) {
+    a.addEventListener('click', function () {
+      var id = a.getAttribute('data-done');
+      // 화면이 바뀌기 전에 저장만 해 둔다
+      done[id] = true;
+      persist();
+      setTimeout(render, 600);
+    });
+  });
+  render();
+
+  // ── 어디서 열었는지 확인: 아이폰 Safari가 아니면 안내
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  var otherBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|Whale|NAVER|KAKAOTALK|Instagram|FBAN|FBAV|Line\/|DaumApps|everytime|GSA\//i.test(ua);
+  var isSafari = isIOS && /Safari\//.test(ua) && !otherBrowser;
+  var env = document.getElementById('env');
+  var here = location.href.split('#')[0];
+  if (!isSafari) {
+    env.hidden = false;
+    var openSafari = document.getElementById('open-safari');
+    if (!isIOS) {
+      document.getElementById('env-title').textContent = '아이폰용 안내예요';
+      document.getElementById('env-text').textContent = '아이폰 Safari로 이 주소를 열어 설치해 주세요. 갤럭시용은 준비 중이에요.';
+      openSafari.hidden = true;
+      document.getElementById('env-hint').hidden = true;
+    } else {
+      var kakao = /KAKAOTALK/i.test(ua);
+      document.getElementById('env-text').textContent = kakao
+        ? '카카오톡 안의 화면에서는 설치할 수 없어요. Safari로 열어서 계속해 주세요.'
+        : 'Safari가 아닌 곳(다른 앱 · 크롬 등)에서는 설치할 수 없어요. Safari로 열어서 계속해 주세요.';
+      openSafari.href = here.replace(/^https?:\/\//, 'x-safari-https://');
+    }
+  }
+  document.getElementById('copy-link').addEventListener('click', function () {
+    var btn = this;
+    function ok() { btn.textContent = '복사했어요 · Safari 주소창에 붙여 넣으세요'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(here).then(ok, function () { window.prompt('이 주소를 복사하세요', here); });
+    } else {
+      window.prompt('이 주소를 복사하세요', here);
+    }
+  });
+})();
+</script>
+</body>
+</html>
