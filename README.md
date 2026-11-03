@@ -5,7 +5,7 @@
 
 ## 설치
 
-**아이폰 Safari로 이 주소를 여세요 → https://selfhiam.github.io/Iphone_hoseo_LMS_checker/**
+**아이폰 Safari로 이 주소를 여세요 → https://selfhiam.github.io/Iphone_hoseo_LMS_checker/index.html**
 
 버튼을 차례로 누르면 되는 설치 안내 페이지입니다 (3단계, 2분). 카카오톡에서 열었다면 Safari로 열어 주세요.
 
