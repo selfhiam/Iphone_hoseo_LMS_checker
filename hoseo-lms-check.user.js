@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         hoseo-lms-check
 // @description  호서 LMS 체크 — 호서대 LMS 화면 위에 이번 주 할 일(과제 · 동영상 출석 · 퀴즈 · 공지)을 모아 보여 줍니다. 학교에서 만든 것이 아닌 비공식 도구입니다.
-// @version      1.0.4
+// @version      1.0.5
 // @updateURL    https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.meta.js
 // @downloadURL  https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.user.js
 // @match        https://learn.hoseo.ac.kr/*
@@ -1411,7 +1411,7 @@
   }
 
   // userscript/src/ui.js
-  var VERSION = true ? "1.0.4" : "dev";
+  var VERSION = true ? "1.0.5" : "dev";
   var UPDATE_BASE = true ? "https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main" : "";
   var UPDATE_META = UPDATE_BASE ? `${UPDATE_BASE}/hoseo-lms-check.meta.js` : "";
   var UPDATE_FILE = UPDATE_BASE ? `${UPDATE_BASE}/hoseo-lms-check.user.js` : "";
@@ -1596,6 +1596,50 @@
       toast("Safari가 이 탭을 닫지 못하게 했어요. 아래쪽 탭 버튼에서 닫아 주세요.", 5e3);
     }, 400);
   }
+  var LOGIN_SRC = "hlc-login-src";
+  var isFreshTab = () => history.length <= 1 && !window.opener;
+  function openTab(url, name = "_blank") {
+    try {
+      return window.open(url, name) || null;
+    } catch {
+      return null;
+    }
+  }
+  function hookLogin() {
+    const root = document.documentElement;
+    if (root.hasAttribute("data-hlc-login")) return;
+    root.setAttribute("data-hlc-login", VERSION);
+    const moveToNewTab = (form) => {
+      if (!form || form.tagName !== "FORM" || !form.querySelector("input[type=password]")) return;
+      if (String(form.target || "").startsWith("hlc-main-")) return;
+      if (!isFreshTab()) return;
+      const name = `hlc-main-${Date.now()}`;
+      if (!openTab("", name)) return;
+      window.name = LOGIN_SRC;
+      form.target = name;
+    };
+    window.addEventListener("submit", (e) => {
+      if (!e.defaultPrevented) moveToNewTab(e.target);
+    });
+    for (const form of document.querySelectorAll("form")) {
+      if (!form.querySelector("input[type=password]") || form.elements.namedItem("submit")) continue;
+      const nativeSubmit = HTMLFormElement.prototype.submit;
+      form.submit = function submit() {
+        try {
+          moveToNewTab(this);
+        } catch {
+        }
+        return nativeSubmit.call(this);
+      };
+    }
+  }
+  function closeLoginOpener() {
+    try {
+      const op = window.opener;
+      if (op && !op.closed && op.name === LOGIN_SRC && op.location.origin === location.origin) op.close();
+    } catch {
+    }
+  }
   async function checkUpdate({ silent = false } = {}) {
     if (!UPDATE_META || state.update.status === "checking") return;
     state.update = { ...state.update, status: "checking" };
@@ -1713,8 +1757,12 @@
     if (!ok) return null;
     return {
       href: url,
-      onclick: () => {
+      onclick: (e) => {
         rememberScroll();
+        if (state.launchedByShortcut && openTab(url)) {
+          e.preventDefault();
+          return;
+        }
         save(sessionStorage, KEY.ret, { from: location.href, route: state.route, stack: state.stack, tab: state.tab, scroll: state.scroll, ui: state.ui });
       }
     };
@@ -2542,13 +2590,17 @@
     onScroll();
   }
   function start() {
+    closeLoginOpener();
     const running = document.getElementById(HOST_ID);
     if (running) {
       const list = (running.getAttribute("data-dupe") || "").split(",").filter(Boolean);
       running.setAttribute("data-dupe", [...list, VERSION].join(","));
       return;
     }
-    if (isLoginPage(document)) return;
+    if (isLoginPage(document)) {
+      hookLogin();
+      return;
+    }
     hostEl = document.createElement("div");
     hostEl.id = HOST_ID;
     hostEl.setAttribute("data-version", VERSION);
