@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         hoseo-lms-check
 // @description  호서 LMS 체크 — 호서대 LMS 화면 위에 이번 주 할 일(과제 · 동영상 출석 · 퀴즈 · 공지)을 모아 보여 줍니다. 학교에서 만든 것이 아닌 비공식 도구입니다.
-// @version      1.0.6
+// @version      1.0.7
 // @updateURL    https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.meta.js
 // @downloadURL  https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main/hoseo-lms-check.user.js
 // @match        https://learn.hoseo.ac.kr/*
@@ -1516,7 +1516,7 @@
   }
 
   // userscript/src/ui.js
-  var VERSION = true ? "1.0.6" : "dev";
+  var VERSION = true ? "1.0.7" : "dev";
   var UPDATE_BASE = true ? "https://raw.githubusercontent.com/selfhiam/Iphone_hoseo_LMS_checker/main" : "";
   var UPDATE_META = UPDATE_BASE ? `${UPDATE_BASE}/hoseo-lms-check.meta.js` : "";
   var UPDATE_FILE = UPDATE_BASE ? `${UPDATE_BASE}/hoseo-lms-check.user.js` : "";
@@ -1568,7 +1568,11 @@
     /** 업데이트: idle · checking · latest · downloading · ready(받아 둠, 새로고침하면 적용) · new(직접 설치해야 함) · error */
     update: { status: "idle", latest: null },
     /** 홈 화면 바로가기(?lmscheck)로 연 탭인지: 이때 ✕ 는 Safari 탭을 닫는다 */
-    launchedByShortcut: false
+    launchedByShortcut: false,
+    /** 단축어(공유 → 호서 LMS 체크)로 이 페이지에 넣은 경우: 매번 GitHub의 최신 코드를 불러온다 */
+    injected: false,
+    /** 로그인 화면 위에서 로그인하고 할 일 화면을 띄운 경우 (닫으면 LMS 첫 화면으로) */
+    loginBehind: false
   };
   var shadow;
   var hostEl;
@@ -1693,6 +1697,10 @@
   }
   function closeButton() {
     if (!state.launchedByShortcut) {
+      if (state.loginBehind) {
+        location.replace("/my/");
+        return;
+      }
       closePanel();
       return;
     }
@@ -1702,6 +1710,10 @@
     }
     setTimeout(() => {
       if (document.visibilityState !== "visible") return;
+      if (state.loginBehind) {
+        location.replace("/my/");
+        return;
+      }
       closePanel();
       toast("Safari가 이 탭을 닫지 못하게 했어요. 아래쪽 탭 버튼에서 닫아 주세요.", 5e3);
     }, 400);
@@ -1743,6 +1755,83 @@
       };
     }
   }
+  var noticeTimer = 0;
+  function notice2(text, ms = 5e3) {
+    let el = document.getElementById("hlc-notice");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "hlc-notice";
+      el.setAttribute("role", "status");
+      el.style.cssText = 'position:fixed;left:16px;right:16px;top:calc(env(safe-area-inset-top) + 12px);z-index:2147483647;padding:14px 16px;border-radius:14px;background:#2F5BEA;color:#fff;font:600 15px/1.45 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.25);transition:opacity .25s;pointer-events:none;text-align:center';
+      document.body.append(el);
+    }
+    el.textContent = text;
+    el.style.opacity = "1";
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+      el.style.opacity = "0";
+    }, ms);
+  }
+  function loginInPage(onSuccess) {
+    const form = [...document.querySelectorAll("form")].find((f) => f.querySelector("input[type=password]"));
+    if (!form) return;
+    if (form.hasAttribute("data-hlc-inpage")) {
+      notice2("로그인하면 바로 할 일 화면이 떠요.");
+      return;
+    }
+    form.setAttribute("data-hlc-inpage", VERSION);
+    notice2("로그인하면 바로 할 일 화면이 떠요.", 6e3);
+    const name = "hlc-login-frame";
+    let frame = null;
+    const makeFrame = () => {
+      if (frame) frame.remove();
+      frame = document.createElement("iframe");
+      frame.name = name;
+      frame.setAttribute("aria-hidden", "true");
+      frame.tabIndex = -1;
+      frame.style.cssText = "position:absolute;width:0;height:0;border:0;visibility:hidden";
+      frame.addEventListener("load", onFrameLoad);
+      document.body.append(frame);
+    };
+    const onFrameLoad = (e) => {
+      const f = e.currentTarget;
+      let doc = null;
+      let href = "";
+      try {
+        doc = f.contentDocument;
+        href = f.contentWindow.location.href;
+      } catch {
+        doc = null;
+      }
+      if (href === "about:blank") return;
+      if (doc && !isLoginPage(doc)) {
+        form.removeAttribute("target");
+        f.remove();
+        const el = document.getElementById("hlc-notice");
+        if (el) el.style.opacity = "0";
+        onSuccess();
+        return;
+      }
+      if (doc) {
+        const err = doc.querySelector(".loginerrors, #loginerrormessage, .alert-danger, .alert-error");
+        const token = doc.querySelector("input[name=logintoken]");
+        const mine = form.querySelector("input[name=logintoken]");
+        if (token && mine) mine.value = token.value;
+        notice2(err && err.textContent.replace(/\s+/g, " ").trim() || "로그인하지 못했어요. 학번과 비밀번호를 확인해 주세요.", 6e3);
+        return;
+      }
+      form.removeAttribute("target");
+      f.remove();
+      notice2("이 화면에서 다시 로그인해 주세요. 로그인한 뒤 단축어를 한 번 더 실행하면 돼요.", 7e3);
+    };
+    makeFrame();
+    form.target = name;
+    form.addEventListener("submit", (e) => {
+      if (e.defaultPrevented || form.target !== name) return;
+      makeFrame();
+      notice2("로그인하는 중…", 15e3);
+    });
+  }
   function closeLoginOpener() {
     try {
       const op = window.opener;
@@ -1751,6 +1840,7 @@
     }
   }
   function maybeCheckUpdate() {
+    if (state.injected) return;
     const last = load(localStorage, KEY.update, null);
     if (UPDATE_META && (!last || Date.now() - last.checkedAt > UPDATE_EVERY_MS)) checkUpdate({ silent: true });
   }
@@ -1830,6 +1920,15 @@
     const auto = state.settings.autoUpdate !== false;
     const version = h("div", { class: "t" }, `지금 버전 ${VERSION}`);
     const installedNote = INSTALLED !== VERSION ? h("div", { class: "d" }, `자동 업데이트로 받은 버전이에요 (Userscripts 폴더의 파일은 ${INSTALLED})`) : null;
+    if (state.injected) {
+      return setGroup("업데이트", null, h("div", { class: "set-row" }, h(
+        "div",
+        { class: "grow" },
+        version,
+        h("div", { class: "d", id: "update-status" }, "단축어로 열 때마다 GitHub에서 가장 새 버전을 불러와요. 따로 업데이트할 필요가 없어요."),
+        duplicateNote()
+      )));
+    }
     if (!UPDATE_FILE) {
       return setGroup("업데이트", null, h("div", { class: "set-row" }, h(
         "div",
@@ -1944,7 +2043,7 @@
       href: url,
       onclick: (e) => {
         rememberScroll();
-        if (state.launchedByShortcut && openTab(url)) {
+        if ((state.launchedByShortcut || state.injected) && openTab(url)) {
           e.preventDefault();
           return;
         }
@@ -2786,18 +2885,29 @@
     scroller.onscroll = onScroll;
     onScroll();
   }
-  function start() {
+  function start(opts = {}) {
+    const injected2 = !!opts.injected;
     closeLoginOpener();
     const running = document.getElementById(HOST_ID);
     if (running) {
+      if (injected2) {
+        running.dispatchEvent(new CustomEvent("hlc-open"));
+        return;
+      }
       const list = (running.getAttribute("data-dupe") || "").split(",").filter(Boolean);
       running.setAttribute("data-dupe", [...list, VERSION].join(","));
       return;
     }
     if (isLoginPage(document)) {
-      hookLogin();
+      if (injected2) loginInPage(() => mount({ injected: injected2, loginBehind: true }));
+      else hookLogin();
       return;
     }
+    mount({ injected: injected2 });
+  }
+  function mount({ injected: injected2 = false, loginBehind = false } = {}) {
+    state.injected = injected2;
+    state.loginBehind = loginBehind;
     hostEl = document.createElement("div");
     hostEl.id = HOST_ID;
     hostEl.setAttribute("data-version", VERSION);
@@ -2812,6 +2922,7 @@
       h("div", { id: "dialog-root" })
     );
     document.body.append(hostEl);
+    hostEl.addEventListener("hlc-open", () => openPanel());
     state.settings = { theme: "system", hidden: [], autoUpdate: true, ...load(localStorage, KEY.settings, {}) };
     applyTheme();
     const snap = load(localStorage, KEY.snapshot, null);
@@ -2820,13 +2931,13 @@
     if (known && known.latest) state.update = { status: isNewer(known.latest, VERSION) ? knownStatus(known.latest) : "latest", latest: known.latest };
     const fromShortcut = /[?&]lmscheck\b/.test(location.search);
     if (fromShortcut) save(sessionStorage, KEY.launch, 1);
-    state.launchedByShortcut = fromShortcut || !!load(sessionStorage, KEY.launch, null);
+    state.launchedByShortcut = fromShortcut || !!load(sessionStorage, KEY.launch, null) || injected2 && isFreshTab();
     const ret = load(sessionStorage, KEY.ret, null);
     if (ret && ret.from === location.href) {
       save(sessionStorage, KEY.ret, null);
       Object.assign(state, { route: ret.route || { name: "main" }, stack: ret.stack || [], tab: ret.tab || "home", scroll: ret.scroll || {}, ui: ret.ui || freshUi() });
       openPanel();
-    } else if (fromShortcut) {
+    } else if (fromShortcut || injected2) {
       openPanel();
     } else {
       render();
@@ -2856,12 +2967,20 @@
   }
 
   // userscript/src/main.js
-  var INSTALLED2 = true ? "1.0.6" : "dev";
+  var INSTALLED2 = true ? "1.0.7" : "dev";
+  var thisScript = document.currentScript;
+  var injected = !!(thisScript && thisScript.hasAttribute && thisScript.hasAttribute("data-hlc-inject"));
   function boot() {
-    if (document.body) start();
-    else document.addEventListener("DOMContentLoaded", start, { once: true });
+    if (document.body) start({ injected });
+    else document.addEventListener("DOMContentLoaded", () => start({ injected }), { once: true });
   }
   if (window.top === window.self) {
-    if (!runSaved(INSTALLED2, boot)) boot();
+    if (injected && location.hostname !== "learn.hoseo.ac.kr" && location.hostname !== "localhost") {
+      location.href = "https://learn.hoseo.ac.kr/my/";
+    } else if (injected) {
+      boot();
+    } else if (!runSaved(INSTALLED2, boot)) {
+      boot();
+    }
   }
 })();
